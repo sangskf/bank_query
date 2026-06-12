@@ -75,7 +75,7 @@ jobs:
         run: cargo fmt --check
 
       - name: Clippy
-        run: cargo clippy --target ${{ matrix.target }} -- -D warnings
+        run: cargo clippy -- -D warnings
 
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
