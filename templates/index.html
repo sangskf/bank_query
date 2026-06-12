@@ -64,6 +64,28 @@
         }
         .search-input:focus { border-color: #4a6cf7; }
 
+        .search-clear {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            border: 2px solid #e8ecf4;
+            border-left: none;
+            border-right: none;
+            background: #fff;
+            cursor: pointer;
+            color: #bbb;
+            font-size: 16px;
+            line-height: 1;
+            padding: 0;
+            transition: color .2s;
+        }
+        .search-clear:hover { color: #666; }
+        .search-clear.show { display: flex; }
+        .search-form:focus-within .search-clear {
+            border-color: #4a6cf7;
+        }
+
         .search-btn {
             padding: 0 28px;
             font-size: 16px;
@@ -321,6 +343,7 @@
             <div class="logo">银行查询</div>
             <div class="search-form">
                 <input class="search-input" id="searchInput" placeholder="输入银行编号或名称…" autofocus>
+                <button class="search-clear" id="clearInputBtn" tabindex="-1">✕</button>
                 <button class="search-btn" id="searchBtn">查询</button>
             </div>
             <div class="toolbar">
@@ -481,6 +504,18 @@
 
         $btn.addEventListener('click', search);
         $input.addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
+
+        /* ---- input clear button ---- */
+        var $clearBtn = document.getElementById('clearInputBtn');
+        $input.addEventListener('input', function() {
+            $clearBtn.classList.toggle('show', this.value.length > 0);
+        });
+        $clearBtn.addEventListener('click', function() {
+            $input.value = '';
+            $input.focus();
+            $clearBtn.classList.remove('show');
+            search();
+        });
 
         /* ---- real-time search with debounce ---- */
         var debounceTimer;
