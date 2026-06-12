@@ -152,9 +152,7 @@ fn with_config(
     warp::any().map(move || config.clone())
 }
 
-fn with_db(
-    pool: DbPool,
-) -> impl Filter<Extract = (DbPool,), Error = Infallible> + Clone {
+fn with_db(pool: DbPool) -> impl Filter<Extract = (DbPool,), Error = Infallible> + Clone {
     warp::any().map(move || pool.clone())
 }
 
@@ -207,18 +205,22 @@ async fn handle_import(
     while let Some(part_result) = form.next().await {
         let mut part = match part_result {
             Ok(p) => p,
-            Err(_) => return Ok(warp::reply::json(&serde_json::json!({
-                "success": false,
-                "message": "读取上传文件失败，请检查文件名是否为中文或特殊字符"
-            }))),
+            Err(_) => {
+                return Ok(warp::reply::json(&serde_json::json!({
+                    "success": false,
+                    "message": "读取上传文件失败，请检查文件名是否为中文或特殊字符"
+                })));
+            }
         };
         while let Some(chunk_result) = part.data().await {
             let mut chunk = match chunk_result {
                 Ok(c) => c,
-                Err(_) => return Ok(warp::reply::json(&serde_json::json!({
-                    "success": false,
-                    "message": "读取文件内容失败"
-                }))),
+                Err(_) => {
+                    return Ok(warp::reply::json(&serde_json::json!({
+                        "success": false,
+                        "message": "读取文件内容失败"
+                    })));
+                }
             };
             let len = chunk.remaining();
             let bytes = chunk.copy_to_bytes(len);
@@ -259,9 +261,7 @@ async fn handle_import(
     }
 }
 
-async fn handle_clear(
-    pool: DbPool,
-) -> Result<impl warp::Reply, warp::Rejection> {
+async fn handle_clear(pool: DbPool) -> Result<impl warp::Reply, warp::Rejection> {
     match db::clear_banks(&pool) {
         Ok(count) => Ok(warp::reply::json(&serde_json::json!({
             "success": true,
@@ -290,10 +290,7 @@ async fn handle_update(
     }
 }
 
-async fn handle_delete_one(
-    id: i64,
-    pool: DbPool,
-) -> Result<impl warp::Reply, warp::Rejection> {
+async fn handle_delete_one(id: i64, pool: DbPool) -> Result<impl warp::Reply, warp::Rejection> {
     match db::delete_bank(&pool, id) {
         Ok(true) => Ok(warp::reply::json(&serde_json::json!({"success": true}))),
         Ok(false) => Ok(warp::reply::json(&serde_json::json!({
@@ -309,8 +306,14 @@ async fn handle_template() -> Result<Box<dyn warp::Reply>, warp::Rejection> {
     match excel::generate_template() {
         Ok(data) => {
             let resp = warp::http::Response::builder()
-                .header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-                .header("Content-Disposition", "attachment; filename=\"bank_template.xlsx\"")
+                .header(
+                    "Content-Type",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+                .header(
+                    "Content-Disposition",
+                    "attachment; filename=\"bank_template.xlsx\"",
+                )
                 .body(data)
                 .map_err(|_| warp::reject::reject())?;
             Ok(Box::new(resp))

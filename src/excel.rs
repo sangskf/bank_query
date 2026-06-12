@@ -1,4 +1,4 @@
-use calamine::{open_workbook_from_rs, Data, Reader, Xlsx};
+use calamine::{Data, Reader, Xlsx, open_workbook_from_rs};
 use rust_xlsxwriter::*;
 use std::io::Cursor;
 

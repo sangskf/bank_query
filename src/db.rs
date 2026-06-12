@@ -22,10 +22,11 @@ pub fn init_pool(db_path: &str) -> Result<DbPool, Box<dyn std::error::Error>> {
     )?;
 
     // Migrate: remove duplicates on code, then add unique index for upsert
-    conn.execute("DELETE FROM banks WHERE id NOT IN (SELECT MIN(id) FROM banks GROUP BY code)", [])?;
-    conn.execute_batch(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_banks_code_unique ON banks(code);"
+    conn.execute(
+        "DELETE FROM banks WHERE id NOT IN (SELECT MIN(id) FROM banks GROUP BY code)",
+        [],
     )?;
+    conn.execute_batch("CREATE UNIQUE INDEX IF NOT EXISTS idx_banks_code_unique ON banks(code);")?;
 
     Ok(pool)
 }
