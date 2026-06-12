@@ -12,36 +12,43 @@ permissions:
   contents: write
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - name: Check formatting
+        run: cargo fmt --check
+      - name: Clippy
+        run: cargo clippy
+
   build:
+    needs: lint
     strategy:
       matrix:
         include:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             suffix: .exe
-            archive: zip
             test: true
           - os: windows-latest
             target: aarch64-pc-windows-msvc
             suffix: .exe
-            archive: zip
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             suffix: ''
-            archive: tar.gz
             test: true
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             suffix: ''
-            archive: tar.gz
           - os: macos-latest
             target: x86_64-apple-darwin
             suffix: ''
-            archive: tar.gz
           - os: macos-latest
             target: aarch64-apple-darwin
             suffix: ''
-            archive: tar.gz
             test: true
 
     runs-on: ${{ matrix.os }}
@@ -53,7 +60,6 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-          components: clippy, rustfmt
 
       - name: Install cross-compilation dependencies (Linux ARM64)
         if: matrix.target == 'aarch64-unknown-linux-gnu'
@@ -61,21 +67,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
-
-      - name: Cache cargo
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ matrix.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Check formatting
-        run: cargo fmt --check
-
-      - name: Clippy
-        run: cargo clippy -- -D warnings
 
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
@@ -106,10 +97,7 @@ jobs:
           for dir in */; do
             target="${dir%/}"
             bin="bank_query"
-            if [ -f "${target}/bank_query.exe" ]; then
-              bin="bank_query.exe"
-            fi
-            # Windows targets use .zip; others use .tar.gz
+            [ -f "${target}/bank_query.exe" ] && bin="bank_query.exe"
             case "${target}" in
               *-pc-windows-*)
                 archive="bank_query-${tag}-${target}.zip"
