@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>银行查询系统</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: #f5f6fa;
+            color: #333;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        .hero {
+            text-align: center;
+            padding-top: 28vh;
+            transition: padding-top .4s ease;
+        }
+        .hero.has-results {
+            padding-top: 40px;
+        }
+
+        .logo {
+            font-size: 42px;
+            font-weight: 700;
+            color: #4a6cf7;
+            letter-spacing: 6px;
+            margin-bottom: 32px;
+            user-select: none;
+        }
+
+        .search-form {
+            display: flex;
+            max-width: 560px;
+            margin: 0 auto;
+            border-radius: 40px;
+            overflow: hidden;
+            box-shadow: 0 2px 12px rgba(74,108,247,.12);
+            transition: box-shadow .25s;
+        }
+        .search-form:focus-within {
+            box-shadow: 0 4px 24px rgba(74,108,247,.22);
+        }
+
+        .search-input {
+            flex: 1;
+            padding: 0 24px;
+            font-size: 16px;
+            border: 2px solid #e8ecf4;
+            border-right: none;
+            outline: none;
+            height: 52px;
+            background: #fff;
+            border-radius: 40px 0 0 40px;
+            transition: border-color .25s;
+        }
+        .search-input:focus { border-color: #4a6cf7; }
+
+        .search-btn {
+            padding: 0 28px;
+            font-size: 16px;
+            font-weight: 500;
+            background: #4a6cf7;
+            color: #fff;
+            border: 2px solid #4a6cf7;
+            cursor: pointer;
+            border-radius: 0 40px 40px 0;
+            transition: background .2s;
+            white-space: nowrap;
+        }
+        .search-btn:hover { background: #3a5ce7; }
+
+        .toolbar {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 16px;
+        }
+        .toolbar button {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 14px;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: color .2s, background .2s;
+        }
+        .toolbar button:hover {
+            color: #4a6cf7;
+            background: rgba(74,108,247,.06);
+        }
+
+        .results-area {
+            margin-top: 24px;
+            padding-bottom: 40px;
+        }
+
+        .result-count {
+            font-size: 14px;
+            color: #999;
+            margin-bottom: 12px;
+        }
+
+        .result-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #fff;
+            border-radius: 8px;
+            padding: 16px 22px;
+            margin-bottom: 8px;
+            box-shadow: 0 1px 4px rgba(0,0,0,.06);
+            transition: box-shadow .2s;
+        }
+        .result-item:hover {
+            box-shadow: 0 2px 12px rgba(0,0,0,.1);
+        }
+        .result-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .result-code {
+            color: #4a6cf7;
+            font-weight: 600;
+            font-size: 17px;
+        }
+        .result-name {
+            color: #444;
+            font-size: 15px;
+        }
+        .result-actions {
+            display: flex;
+            gap: 6px;
+        }
+        .copy-btn {
+            padding: 4px 12px;
+            font-size: 12px;
+            border: 1px solid #d0d5e0;
+            border-radius: 4px;
+            background: #f8f9fc;
+            color: #666;
+            cursor: pointer;
+            transition: all .2s;
+            white-space: nowrap;
+        }
+        .copy-btn:hover {
+            border-color: #4a6cf7;
+            color: #4a6cf7;
+            background: #f0f3ff;
+        }
+        .copy-btn.copied {
+            border-color: #22c55e;
+            color: #22c55e;
+            background: #f0fdf4;
+        }
+
+        .state-msg {
+            text-align: center;
+            color: #bbb;
+            padding: 60px 0;
+            font-size: 15px;
+        }
+
+        .highlight {
+            color: #ef4444;
+            font-weight: 700;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,.45);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-overlay.active { display: flex; }
+
+        .modal {
+            background: #fff;
+            border-radius: 14px;
+            padding: 32px;
+            width: 92%;
+            max-width: 400px;
+            text-align: center;
+        }
+        .modal h3 {
+            font-size: 18px;
+            margin-bottom: 8px;
+        }
+        .modal .desc {
+            color: #888;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+        .modal .file-label {
+            display: inline-block;
+            padding: 10px 28px;
+            background: #4a6cf7;
+            color: #fff;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background .2s;
+        }
+        .modal .file-label:hover { background: #3a5ce7; }
+        .modal input[type="file"] { display: none; }
+        .modal .upload-status {
+            margin-top: 14px;
+            font-size: 14px;
+            color: #666;
+        }
+        .modal .modal-close {
+            display: inline-block;
+            margin-top: 16px;
+            padding: 8px 24px;
+            background: #f0f0f0;
+            color: #666;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background .2s;
+        }
+        .modal .modal-close:hover { background: #e0e0e0; }
+        .modal .danger-btn {
+            display: inline-block;
+            padding: 8px 24px;
+            background: #ef4444;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background .2s;
+        }
+        .modal .danger-btn:hover { background: #dc2626; }
+        .toolbar .danger {
+            color: #ef4444 !important;
+        }
+        .toolbar .danger:hover {
+            color: #dc2626 !important;
+            background: rgba(239,68,68,.06) !important;
+        }
+
+        .toolbar .danger.hidden {
+            display: none;
+        }
+
+        /* Hover actions (edit/delete) — hidden until 5s hover */
+        .row-hover-actions {
+            display: none;
+            gap: 4px;
+            margin-left: 4px;
+        }
+        .result-item.hover .row-hover-actions {
+            display: inline-flex;
+        }
+        .action-btn {
+            padding: 4px 10px;
+            font-size: 12px;
+            border: 1px solid #d0d5e0;
+            border-radius: 4px;
+            background: #f8f9fc;
+            color: #666;
+            cursor: pointer;
+            transition: all .2s;
+            white-space: nowrap;
+        }
+        .action-btn.edit-btn:hover {
+            border-color: #4a6cf7;
+            color: #4a6cf7;
+            background: #f0f3ff;
+        }
+        .action-btn.delete-btn:hover {
+            border-color: #ef4444;
+            color: #ef4444;
+            background: #fef2f2;
+        }
+
+        /* Edit modal form */
+        .edit-field {
+            margin-bottom: 16px;
+            text-align: left;
+        }
+        .edit-field label {
+            display: block;
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 4px;
+        }
+        .edit-field input {
+            width: 100%;
+            padding: 10px 14px;
+            font-size: 15px;
+            border: 1px solid #d0d5e0;
+            border-radius: 6px;
+            outline: none;
+            transition: border-color .2s;
+        }
+        .edit-field input:focus {
+            border-color: #4a6cf7;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="hero" id="hero">
+            <div class="logo">银行查询</div>
+            <div class="search-form">
+                <input class="search-input" id="searchInput" placeholder="输入银行编号或名称…" autofocus>
+                <button class="search-btn" id="searchBtn">查询</button>
+            </div>
+            <div class="toolbar">
+                <button onclick="showImport()">导入数据</button>
+                <button onclick="downloadTemplate()">下载模板</button>
+                <button class="danger hidden" id="clearBtn" onclick="showClear()">清空数据</button>
+            </div>
+        </div>
+
+        <div class="results-area" id="resultsArea"></div>
+    </div>
+
+    <!-- Import modal -->
+    <div class="modal-overlay" id="importOverlay" onclick="if(event.target===this)hideImport()">
+        <div class="modal">
+            <h3>导入银行数据</h3>
+            <p class="desc">选择 .xlsx 文件（编号与名称两列）</p>
+            <label class="file-label" for="fileInput">选择文件</label>
+            <input type="file" id="fileInput" accept=".xlsx">
+            <div class="upload-status" id="uploadStatus"></div>
+            <button class="modal-close" onclick="hideImport()">取消</button>
+        </div>
+    </div>
+
+    <!-- Clear confirmation modal -->
+    <div class="modal-overlay" id="clearOverlay" onclick="if(event.target===this)hideClear()">
+        <div class="modal">
+            <h3>清空数据</h3>
+            <p class="desc">确定要清空所有银行数据吗？此操作不可恢复。</p>
+            <div style="margin-top: 20px; display: flex; justify-content: center; gap: 10px;">
+                <button class="danger-btn" onclick="confirmClear()">确认清空</button>
+                <button class="modal-close" onclick="hideClear()">取消</button>
+            </div>
+            <div class="upload-status" id="clearStatus"></div>
+        </div>
+    </div>
+
+    <!-- Edit modal -->
+    <div class="modal-overlay" id="editOverlay" onclick="if(event.target===this)hideEdit()">
+        <div class="modal" style="text-align:left">
+            <h3 style="text-align:center;margin-bottom:16px">编辑银行数据</h3>
+            <div class="edit-field">
+                <label>银行编号</label>
+                <input id="editCode" type="text">
+            </div>
+            <div class="edit-field">
+                <label>银行名称</label>
+                <input id="editName" type="text">
+            </div>
+            <input type="hidden" id="editId">
+            <div class="upload-status" id="editStatus"></div>
+            <div style="display:flex;justify-content:center;gap:10px;margin-top:20px">
+                <button class="file-label" onclick="confirmEdit()">保存</button>
+                <button class="modal-close" onclick="hideEdit()">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete single confirmation modal -->
+    <div class="modal-overlay" id="deleteOverlay" onclick="if(event.target===this)hideDelete()">
+        <div class="modal">
+            <h3>删除记录</h3>
+            <p class="desc">确定要删除这条记录吗？此操作不可恢复。</p>
+            <input type="hidden" id="deleteId">
+            <div style="margin-top:20px;display:flex;justify-content:center;gap:10px">
+                <button class="danger-btn" onclick="confirmDelete()">确认删除</button>
+                <button class="modal-close" onclick="hideDelete()">取消</button>
+            </div>
+            <div class="upload-status" id="deleteStatus"></div>
+        </div>
+    </div>
+
+    <script>
+        const $input = document.getElementById('searchInput');
+        const $btn   = document.getElementById('searchBtn');
+        const $area  = document.getElementById('resultsArea');
+        const $hero  = document.getElementById('hero');
+
+        var currentQuery = '';
+
+        /* ---- search ---- */
+        async function search() {
+            const q = $input.value.trim();
+            currentQuery = q;
+            if (!q) {
+                $hero.classList.remove('has-results');
+                $area.innerHTML = '';
+                return;
+            }
+            $hero.classList.add('has-results');
+            $area.innerHTML = '<div class="state-msg">查询中…</div>';
+
+            try {
+                const r = await fetch('/api/banks?q=' + encodeURIComponent(q));
+                const d = await r.json();
+                render(d);
+            } catch (_) {
+                $area.innerHTML = '<div class="state-msg">查询失败，请重试</div>';
+            }
+        }
+
+        function highlightText(text, query) {
+            if (!query) return esc(text);
+            var escaped = esc(text);
+            var q = esc(query).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            var re = new RegExp('(' + q + ')', 'gi');
+            return escaped.replace(re, '<span class="highlight">$1</span>');
+        }
+
+        function render(data) {
+            if (!data.results || data.results.length === 0) {
+                $area.innerHTML = '<div class="state-msg">未找到匹配结果</div>';
+                return;
+            }
+            var q = currentQuery;
+            let html = '<div class="result-count">共 ' + data.total + ' 条结果</div>';
+            for (const b of data.results) {
+                html += '<div class="result-item" data-id="' + b.id + '">' +
+                        '<div class="result-info">' +
+                        '<span class="result-code">' + highlightText(b.code, q) + '</span>' +
+                        '<span class="result-name">' + highlightText(b.name, q) + '</span>' +
+                        '</div>' +
+                        '<div class="result-actions">' +
+                        '<button class="copy-btn" data-clip="' + esc(b.code) + '">复制编号</button>' +
+                        '<button class="copy-btn" data-clip="' + esc(b.name) + '">复制名称</button>' +
+                        '<div class="row-hover-actions">' +
+                        '<button class="action-btn edit-btn" onclick="openEdit(' + b.id + ')">编辑</button>' +
+                        '<button class="action-btn delete-btn" onclick="openDelete(' + b.id + ')">删除</button>' +
+                        '</div>' +
+                        '</div>' +
+                        '</div>';
+            }
+            $area.innerHTML = html;
+        }
+
+        $area.addEventListener('click', function(e) {
+            var btn = e.target.closest('.copy-btn');
+            if (!btn) return;
+            var text = btn.getAttribute('data-clip');
+            navigator.clipboard.writeText(text).then(function() {
+                var orig = btn.textContent;
+                btn.textContent = '已复制';
+                btn.classList.add('copied');
+                setTimeout(function() {
+                    btn.textContent = orig;
+                    btn.classList.remove('copied');
+                }, 2000);
+            }).catch(function() {
+                btn.textContent = '复制失败';
+            });
+        });
+
+        function esc(s) {
+            const d = document.createElement('div');
+            d.textContent = s;
+            return d.innerHTML;
+        }
+
+        $btn.addEventListener('click', search);
+        $input.addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
+
+        /* ---- real-time search with debounce ---- */
+        var debounceTimer;
+        $input.addEventListener('input', function() {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(search, 200);
+        });
+
+        /* ---- logo click 3x to reveal clear ---- */
+        var logoClickCount = 0;
+        document.querySelector('.logo').addEventListener('click', function() {
+            logoClickCount++;
+            if (logoClickCount >= 3) {
+                document.getElementById('clearBtn').classList.remove('hidden');
+            }
+        });
+
+        /* ---- import ---- */
+        function showImport() {
+            document.getElementById('importOverlay').classList.add('active');
+        }
+        function hideImport() {
+            document.getElementById('importOverlay').classList.remove('active');
+            document.getElementById('uploadStatus').textContent = '';
+            document.getElementById('fileInput').value = '';
+        }
+
+        document.getElementById('fileInput').addEventListener('change', async function() {
+            const file = this.files[0];
+            if (!file) return;
+            const status = document.getElementById('uploadStatus');
+            status.textContent = '上传中…';
+
+            const fd = new FormData();
+            fd.append('file', file);
+
+            try {
+                const r = await fetch('/api/banks/import', { method: 'POST', body: fd });
+                const d = await r.json();
+                status.textContent = d.success
+                    ? '成功导入 ' + d.count + ' 条数据'
+                    : '导入失败: ' + (d.message || '文件格式有误');
+            } catch (_) {
+                status.textContent = '导入失败，请重试';
+            }
+            this.value = '';
+        });
+
+        /* ---- clear data ---- */
+        function showClear() {
+            document.getElementById('clearOverlay').classList.add('active');
+            document.getElementById('clearStatus').textContent = '';
+        }
+        function hideClear() {
+            document.getElementById('clearOverlay').classList.remove('active');
+        }
+
+        async function confirmClear() {
+            var status = document.getElementById('clearStatus');
+            status.textContent = '清空中…';
+            try {
+                var r = await fetch('/api/banks', { method: 'DELETE' });
+                var d = await r.json();
+                if (d.success) {
+                    status.textContent = '已清空 ' + d.count + ' 条数据';
+                    $area.innerHTML = '';
+                    setTimeout(hideClear, 1200);
+                } else {
+                    status.textContent = '清空失败: ' + (d.message || '');
+                }
+            } catch (_) {
+                status.textContent = '清空失败，请重试';
+            }
+        }
+
+        /* ---- click row 3 times to show edit/delete ---- */
+        var clickCounts = {};
+
+        $area.addEventListener('click', function(e) {
+            var item = e.target.closest('.result-item');
+            if (!item) return;
+            // Ignore clicks on buttons inside the row
+            if (e.target.closest('button')) return;
+
+            var id = item.dataset.id;
+            clickCounts[id] = (clickCounts[id] || 0) + 1;
+
+            if (clickCounts[id] >= 3) {
+                clickCounts[id] = 0;
+                // Toggle: if already shown, hide; otherwise show
+                item.classList.toggle('hover');
+            }
+        });
+
+        /* ---- edit bank ---- */
+        var currentEditId = null;
+
+        function openEdit(id) {
+            currentEditId = id;
+            // Find the bank data from the rendered items
+            var item = $area.querySelector('.result-item[data-id="' + id + '"]');
+            var code = item.querySelector('.result-code').textContent;
+            var name = item.querySelector('.result-name').textContent;
+            document.getElementById('editId').value = id;
+            document.getElementById('editCode').value = code;
+            document.getElementById('editName').value = name;
+            document.getElementById('editStatus').textContent = '';
+            document.getElementById('editOverlay').classList.add('active');
+        }
+        function hideEdit() {
+            document.getElementById('editOverlay').classList.remove('active');
+        }
+
+        async function confirmEdit() {
+            var id = document.getElementById('editId').value;
+            var code = document.getElementById('editCode').value.trim();
+            var name = document.getElementById('editName').value.trim();
+            if (!code || !name) {
+                document.getElementById('editStatus').textContent = '请填写完整信息';
+                return;
+            }
+            var status = document.getElementById('editStatus');
+            status.textContent = '保存中…';
+            try {
+                var r = await fetch('/api/banks/' + id, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({code: code, name: name})
+                });
+                var d = await r.json();
+                if (d.success) {
+                    status.textContent = '保存成功';
+                    setTimeout(function() { hideEdit(); search(); }, 800);
+                } else {
+                    status.textContent = '保存失败: ' + (d.message || '');
+                }
+            } catch (_) {
+                status.textContent = '保存失败，请重试';
+            }
+        }
+
+        /* ---- delete single bank ---- */
+        function openDelete(id) {
+            document.getElementById('deleteId').value = id;
+            document.getElementById('deleteStatus').textContent = '';
+            document.getElementById('deleteOverlay').classList.add('active');
+        }
+        function hideDelete() {
+            document.getElementById('deleteOverlay').classList.remove('active');
+        }
+
+        async function confirmDelete() {
+            var id = document.getElementById('deleteId').value;
+            var status = document.getElementById('deleteStatus');
+            status.textContent = '删除中…';
+            try {
+                var r = await fetch('/api/banks/' + id, { method: 'DELETE' });
+                var d = await r.json();
+                if (d.success) {
+                    status.textContent = '已删除';
+                    setTimeout(function() { hideDelete(); search(); }, 800);
+                } else {
+                    status.textContent = '删除失败: ' + (d.message || '');
+                }
+            } catch (_) {
+                status.textContent = '删除失败，请重试';
+            }
+        }
+
+        /* ---- download template ---- */
+        function downloadTemplate() {
+            window.open('/api/template/download', '_blank');
+        }
+
+        /* ---- handle ?q= from URL ---- */
+        const params = new URLSearchParams(location.search);
+        const q = params.get('q');
+        if (q) { $input.value = q; search(); }
+    </script>
+</body>
+</html>
