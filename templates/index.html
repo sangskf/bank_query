@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>银行查询系统</title>
+    <title>金融机构查询系统</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -444,15 +444,15 @@
     <div class="bg-blob"></div>
     <div class="container">
         <div class="hero" id="hero">
-            <div class="logo">银行查询</div>
+            <div class="logo">金融机构查询</div>
             <div class="search-form">
-                <input class="search-input" id="searchInput" placeholder="输入银行编号或名称…" autofocus>
+                <input class="search-input" id="searchInput" placeholder="输入联行号或银行名称…" autofocus>
                 <button class="search-clear" id="clearInputBtn" tabindex="-1">✕</button>
                 <button class="search-btn" id="searchBtn">查询</button>
             </div>
             <div class="toolbar">
-                <button onclick="showImport()">导入数据</button>
-                <button onclick="downloadTemplate()">下载模板</button>
+                <button class="hidden" id="importBtn" onclick="showImport()">导入数据</button>
+                <button class="hidden" id="templateBtn" onclick="downloadTemplate()">下载模板</button>
                 <button class="danger hidden" id="clearBtn" onclick="showClear()">清空数据</button>
             </div>
         </div>
@@ -463,7 +463,7 @@
     <!-- Import modal -->
     <div class="modal-overlay" id="importOverlay" onclick="if(event.target===this)hideImport()">
         <div class="modal">
-            <h3>导入银行数据</h3>
+            <h3>导入金融机构数据</h3>
             <p class="desc">选择 .xlsx 文件（编号与名称两列）</p>
             <label class="file-label" for="fileInput">选择文件</label>
             <input type="file" id="fileInput" accept=".xlsx">
@@ -476,7 +476,7 @@
     <div class="modal-overlay" id="clearOverlay" onclick="if(event.target===this)hideClear()">
         <div class="modal">
             <h3>清空数据</h3>
-            <p class="desc">确定要清空所有银行数据吗？此操作不可恢复。</p>
+            <p class="desc">确定要清空所有金融机构数据吗？此操作不可恢复。</p>
             <div style="margin-top: 20px; display: flex; justify-content: center; gap: 10px;">
                 <button class="danger-btn" onclick="confirmClear()">确认清空</button>
                 <button class="modal-close" onclick="hideClear()">取消</button>
@@ -488,9 +488,9 @@
     <!-- Edit modal -->
     <div class="modal-overlay" id="editOverlay" onclick="if(event.target===this)hideEdit()">
         <div class="modal" style="text-align:left">
-            <h3 style="text-align:center;margin-bottom:16px">编辑银行数据</h3>
+            <h3 style="text-align:center;margin-bottom:16px">编辑金融机构数据</h3>
             <div class="edit-field">
-                <label>银行编号</label>
+                <label>联行号</label>
                 <input id="editCode" type="text">
             </div>
             <div class="edit-field">
@@ -567,12 +567,12 @@
             for (const b of data.results) {
                 html += '<div class="result-item" data-id="' + b.id + '">' +
                         '<div class="result-info">' +
-                        '<span class="result-code">' + highlightText(b.code, q) + '</span>' +
-                        '<span class="result-name">' + highlightText(b.name, q) + '</span>' +
+                        '<span class="result-code">联行号: ' + highlightText(b.code, q) + '</span>' +
+                        '<span class="result-name">金融机构名称: ' + highlightText(b.name, q) + '</span>' +
                         '</div>' +
                         '<div class="result-actions">' +
-                        '<button class="copy-btn" data-clip="' + esc(b.code) + '">复制编号</button>' +
-                        '<button class="copy-btn" data-clip="' + esc(b.name) + '">复制名称</button>' +
+                        '<button class="copy-btn" data-clip="' + encodeURIComponent(b.code) + '">复制编号</button>' +
+                        '<button class="copy-btn" data-clip="' + encodeURIComponent(b.name) + '">复制名称</button>' +
                         '<div class="row-hover-actions">' +
                         '<button class="action-btn edit-btn" onclick="openEdit(' + b.id + ')">编辑</button>' +
                         '<button class="action-btn delete-btn" onclick="openDelete(' + b.id + ')">删除</button>' +
@@ -586,19 +586,48 @@
         $area.addEventListener('click', function(e) {
             var btn = e.target.closest('.copy-btn');
             if (!btn) return;
-            var text = btn.getAttribute('data-clip');
-            navigator.clipboard.writeText(text).then(function() {
-                var orig = btn.textContent;
-                btn.textContent = '已复制';
-                btn.classList.add('copied');
-                setTimeout(function() {
-                    btn.textContent = orig;
-                    btn.classList.remove('copied');
-                }, 2000);
-            }).catch(function() {
-                btn.textContent = '复制失败';
-            });
+            var raw = btn.getAttribute('data-clip');
+            var text = decodeURIComponent(raw);
+            copyText(text, btn);
         });
+
+        function copyText(text, btn) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(function() {
+                    showCopied(btn);
+                }).catch(function() {
+                    fallbackCopy(text, btn);
+                });
+            } else {
+                fallbackCopy(text, btn);
+            }
+        }
+
+        function fallbackCopy(text, btn) {
+            var ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.left = '-9999px';
+            document.body.appendChild(ta);
+            ta.select();
+            try {
+                document.execCommand('copy');
+                showCopied(btn);
+            } catch (_) {
+                btn.textContent = '复制失败';
+            }
+            document.body.removeChild(ta);
+        }
+
+        function showCopied(btn) {
+            var orig = btn.textContent;
+            btn.textContent = '已复制';
+            btn.classList.add('copied');
+            setTimeout(function() {
+                btn.textContent = orig;
+                btn.classList.remove('copied');
+            }, 2000);
+        }
 
         function esc(s) {
             const d = document.createElement('div');
@@ -633,6 +662,8 @@
         document.querySelector('.logo').addEventListener('click', function() {
             logoClickCount++;
             if (logoClickCount >= 3) {
+                document.getElementById('importBtn').classList.remove('hidden');
+                document.getElementById('templateBtn').classList.remove('hidden');
                 document.getElementById('clearBtn').classList.remove('hidden');
             }
         });
@@ -721,8 +752,8 @@
             currentEditId = id;
             // Find the bank data from the rendered items
             var item = $area.querySelector('.result-item[data-id="' + id + '"]');
-            var code = item.querySelector('.result-code').textContent;
-            var name = item.querySelector('.result-name').textContent;
+            var code = item.querySelector('.result-code').textContent.replace(/^联行号:\s*/, '');
+            var name = item.querySelector('.result-name').textContent.replace(/^金融机构名称:\s*/, '');
             document.getElementById('editId').value = id;
             document.getElementById('editCode').value = code;
             document.getElementById('editName').value = name;
