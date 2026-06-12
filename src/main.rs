@@ -23,6 +23,8 @@ async fn main() {
         Some(Commands::SetPassword { password }) => run_set_password(password),
         Some(Commands::Import { file }) => run_import(file),
         Some(Commands::Clear) => run_clear(),
+        Some(Commands::InstallService) => run_install_service(),
+        Some(Commands::UninstallService) => run_uninstall_service(),
     }
 }
 
@@ -73,7 +75,81 @@ fn run_clear() {
     }
 }
 
+fn run_install_service() {
+    let exe = std::env::current_exe().expect("获取当前执行路径失败");
+    let exe_path = exe.to_string_lossy().replace('/', "\\");
+
+    #[cfg(target_os = "windows")]
+    {
+        let service_name = "bank_query";
+        // Server auto-chdirs to its own directory, so no extra config needed
+        let bin_path = format!("\"{}\" server", exe_path);
+        let status = std::process::Command::new("sc")
+            .args([
+                "create",
+                service_name,
+                "binPath=",
+                &bin_path,
+                "start=",
+                "auto",
+            ])
+            .status()
+            .expect("执行 sc create 失败");
+        if status.success() {
+            // Optional: auto-restart on failure
+            std::process::Command::new("sc")
+                .args([
+                    "failure",
+                    service_name,
+                    "reset=",
+                    "86400",
+                    "actions=",
+                    "restart/60000",
+                ])
+                .status()
+                .ok();
+            println!("服务 {} 注册成功", service_name);
+            println!("启动服务: net start {}", service_name);
+        } else {
+            eprintln!("注册服务失败，请以管理员身份运行");
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = exe_path;
+        eprintln!("install-service 目前仅支持 Windows 系统");
+    }
+}
+
+fn run_uninstall_service() {
+    #[cfg(target_os = "windows")]
+    {
+        let status = std::process::Command::new("sc")
+            .args(["delete", "bank_query"])
+            .status()
+            .expect("执行 sc delete 失败");
+        if status.success() {
+            println!("服务 bank_query 已卸载");
+        } else {
+            eprintln!("卸载服务失败，请以管理员身份运行");
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        eprintln!("uninstall-service 目前仅支持 Windows 系统");
+    }
+}
+
 async fn run_server() {
+    // Change to the directory where the binary is located
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            std::env::set_current_dir(dir).ok();
+        }
+    }
+
     let pool = db::init_pool("bank_query.db").expect("Failed to init database");
     let config = Arc::new(Config::load());
 

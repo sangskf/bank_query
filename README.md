@@ -60,6 +60,29 @@ cargo run set-password <新密码>
 
 更新 `config.toml` 中的管理员密码。
 
+### 注册为 Windows 系统服务
+
+```bash
+bank_query install-service
+```
+
+将当前程序注册为 Windows 系统服务，开机自启。需以管理员身份运行。
+
+服务启动后会自动以可执行文件所在目录为工作目录，配置文件和数据库均读取该目录下的文件。
+
+```bash
+net start bank_query   # 启动服务
+net stop bank_query    # 停止服务
+```
+
+### 卸载系统服务
+
+```bash
+bank_query uninstall-service
+```
+
+需以管理员身份运行。
+
 ### 从 Excel 导入数据
 
 ```bash

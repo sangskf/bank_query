@@ -25,4 +25,8 @@ pub enum Commands {
     },
     /// 清空所有数据
     Clear,
+    /// 注册为系统服务
+    InstallService,
+    /// 卸载系统服务
+    UninstallService,
 }
