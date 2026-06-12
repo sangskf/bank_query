@@ -84,24 +84,45 @@ jobs:
         if: matrix.test == 'true'
         run: cargo test
 
-      - name: Package binary
-        shell: pwsh
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/bank_query${{ matrix.suffix }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Package artifacts
+        shell: bash
         run: |
-          $tag = "${{ github.ref_name }}"
-          $target = "${{ matrix.target }}"
-          $bin = "bank_query${{ matrix.suffix }}"
-          $src = "target/${target}/release/${bin}"
-          if ("${{ matrix.archive }}" -eq "zip") {
-            $zip = "bank_query-${tag}-${target}.zip"
-            Compress-Archive -Path $src -DestinationPath $zip
-            echo "ARTIFACT=$zip" | Out-File -FilePath $env:GITHUB_ENV -Append
-          } else {
-            $tar = "bank_query-${tag}-${target}.tar.gz"
-            tar -czf $tar -C "target/${target}/release" $bin
-            echo "ARTIFACT=$tar" | Out-File -FilePath $env:GITHUB_ENV -Append
-          }
+          tag="${GITHUB_REF_NAME}"
+          for dir in */; do
+            target="${dir%/}"
+            bin="bank_query"
+            if [ -f "${target}/bank_query.exe" ]; then
+              bin="bank_query.exe"
+            fi
+            # Windows targets use .zip; others use .tar.gz
+            case "${target}" in
+              *-pc-windows-*)
+                archive="bank_query-${tag}-${target}.zip"
+                zip "${archive}" -j "${target}/${bin}"
+                ;;
+              *)
+                archive="bank_query-${tag}-${target}.tar.gz"
+                tar -czf "${archive}" -C "${target}" "${bin}"
+                ;;
+            esac
+          done
 
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ env.ARTIFACT }}
+          files: bank_query-*
