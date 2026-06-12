@@ -16,3 +16,5 @@ calamine = "0.26"
 bytes = "1"
 futures-util = "0.3"
 uuid = { version = "1", features = ["v4"] }
+clap = { version = "4", features = ["derive"] }
+toml = "0.8"

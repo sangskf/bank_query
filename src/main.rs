@@ -1,25 +1,98 @@
+mod cli;
+mod config;
 mod db;
 mod excel;
 mod models;
 
 use bytes::Buf;
+use clap::Parser;
+use cli::{Cli, Commands};
+use config::Config;
 use db::DbPool;
 use std::convert::Infallible;
+use std::sync::Arc;
 use warp::Filter;
 
 #[tokio::main]
 async fn main() {
+    let cli = Cli::parse();
+
+    match &cli.command {
+        Some(Commands::Server) | None => run_server().await,
+        Some(Commands::InitDb) => run_init_db(),
+        Some(Commands::SetPassword { password }) => run_set_password(password),
+        Some(Commands::Import { file }) => run_import(file),
+        Some(Commands::Clear) => run_clear(),
+    }
+}
+
+fn run_init_db() {
+    let _pool = db::init_pool("bank_query.db").expect("Failed to init database");
+    println!("数据库已初始化");
+    // Also ensure config exists
+    Config::load();
+    println!("配置文件已创建");
+}
+
+fn run_set_password(password: &str) {
+    let mut cfg = Config::load();
+    cfg.admin_password = password.to_string();
+    cfg.save();
+    println!("管理员密码已更新");
+}
+
+fn run_import(file: &str) {
     let pool = db::init_pool("bank_query.db").expect("Failed to init database");
+    let data = match std::fs::read(file) {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("读取文件失败: {}", e);
+            return;
+        }
+    };
+    match excel::parse_excel(&data) {
+        Ok(records) => {
+            if records.is_empty() {
+                eprintln!("文件中没有有效数据");
+                return;
+            }
+            match db::insert_banks(&pool, &records) {
+                Ok(count) => println!("成功导入 {} 条数据", count),
+                Err(e) => eprintln!("导入失败: {}", e),
+            }
+        }
+        Err(e) => eprintln!("解析文件失败: {}", e),
+    }
+}
+
+fn run_clear() {
+    let pool = db::init_pool("bank_query.db").expect("Failed to init database");
+    match db::clear_banks(&pool) {
+        Ok(count) => println!("已清空 {} 条数据", count),
+        Err(e) => eprintln!("清空失败: {}", e),
+    }
+}
+
+async fn run_server() {
+    let pool = db::init_pool("bank_query.db").expect("Failed to init database");
+    let config = Arc::new(Config::load());
 
     let port: u16 = std::env::var("PORT")
         .ok()
         .and_then(|v| v.parse().ok())
-        .unwrap_or(10119);
+        .unwrap_or(config.port);
 
     // GET / — serve the HTML page
     let index = warp::path::end()
         .and(warp::get())
         .map(|| warp::reply::html(include_str!("../templates/index.html")));
+
+    // POST /api/verify-password — verify admin password
+    let verify_password = warp::path!("api" / "verify-password")
+        .and(warp::post())
+        .and(warp::body::json())
+        .and(with_config(config.clone()))
+        .and_then(handle_verify_password);
 
     // GET /api/banks?q=xxx — fuzzy search
     let search = warp::path!("api" / "banks")
@@ -59,8 +132,8 @@ async fn main() {
         .and(warp::get())
         .and_then(handle_template);
 
-    // warp resolves in order, so /api/banks (exact) must come before /api/banks/{id}
     let routes = index
+        .or(verify_password)
         .or(search)
         .or(import)
         .or(clear)
@@ -73,6 +146,12 @@ async fn main() {
     warp::serve(routes).run(([0, 0, 0, 0], port)).await;
 }
 
+fn with_config(
+    config: Arc<Config>,
+) -> impl Filter<Extract = (Arc<Config>,), Error = Infallible> + Clone {
+    warp::any().map(move || config.clone())
+}
+
 fn with_db(
     pool: DbPool,
 ) -> impl Filter<Extract = (DbPool,), Error = Infallible> + Clone {
@@ -80,6 +159,21 @@ fn with_db(
 }
 
 // ── handlers ──
+
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+struct PasswordInput {
+    password: String,
+}
+
+async fn handle_verify_password(
+    input: PasswordInput,
+    config: Arc<Config>,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let valid = input.password == config.admin_password;
+    Ok(warp::reply::json(&serde_json::json!({ "valid": valid })))
+}
 
 async fn handle_search(
     params: std::collections::HashMap<String, String>,

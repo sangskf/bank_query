@@ -258,6 +258,12 @@
             font-weight: 700;
         }
 
+        .result-code .label {
+            color: #333;
+            font-weight: 400;
+            font-size: 15px;
+        }
+
         /* Modal */
         .modal-overlay {
             display: none;
@@ -337,11 +343,10 @@
             background: rgba(239,68,68,.06) !important;
         }
 
-        .toolbar .danger.hidden {
-            display: none;
+        .hidden {
+            display: none !important;
         }
 
-        /* Hover actions (edit/delete) — hidden until 5s hover */
         .row-hover-actions {
             display: none;
             gap: 4px;
@@ -350,6 +355,7 @@
         .result-item.hover .row-hover-actions {
             display: inline-flex;
         }
+
         .action-btn {
             padding: 4px 10px;
             font-size: 12px;
@@ -446,7 +452,7 @@
         <div class="hero" id="hero">
             <div class="logo">金融机构查询</div>
             <div class="search-form">
-                <input class="search-input" id="searchInput" placeholder="输入联行号或银行名称…" autofocus>
+                <input class="search-input" id="searchInput" placeholder="输入联行号或金融机构名称…" autofocus>
                 <button class="search-clear" id="clearInputBtn" tabindex="-1">✕</button>
                 <button class="search-btn" id="searchBtn">查询</button>
             </div>
@@ -494,7 +500,7 @@
                 <input id="editCode" type="text">
             </div>
             <div class="edit-field">
-                <label>银行名称</label>
+                <label>金融机构名称</label>
                 <input id="editName" type="text">
             </div>
             <input type="hidden" id="editId">
@@ -567,8 +573,8 @@
             for (const b of data.results) {
                 html += '<div class="result-item" data-id="' + b.id + '">' +
                         '<div class="result-info">' +
-                        '<span class="result-code">联行号: ' + highlightText(b.code, q) + '</span>' +
-                        '<span class="result-name">金融机构名称: ' + highlightText(b.name, q) + '</span>' +
+                        '<span class="result-code"><span class="label">联行号: </span>' + highlightText(b.code, q) + '</span>' +
+                        '<span class="result-name"><span class="label">金融机构名称: </span>' + highlightText(b.name, q) + '</span>' +
                         '</div>' +
                         '<div class="result-actions">' +
                         '<button class="copy-btn" data-clip="' + encodeURIComponent(b.code) + '">复制编号</button>' +
@@ -635,6 +641,23 @@
             return d.innerHTML;
         }
 
+        /* ---- password protection ---- */
+        async function checkPassword() {
+            var pwd = prompt('请输入操作密码：');
+            if (!pwd) return false;
+            try {
+                var r = await fetch('/api/verify-password', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({password: pwd})
+                });
+                var d = await r.json();
+                if (d.valid) return true;
+            } catch (_) {}
+            alert('密码错误');
+            return false;
+        }
+
         $btn.addEventListener('click', search);
         $input.addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
 
@@ -657,19 +680,22 @@
             debounceTimer = setTimeout(search, 200);
         });
 
-        /* ---- logo click 3x to reveal clear ---- */
+        /* ---- logo click 3x to reveal toolbar ---- */
         var logoClickCount = 0;
         document.querySelector('.logo').addEventListener('click', function() {
             logoClickCount++;
             if (logoClickCount >= 3) {
+                logoClickCount = 0;
                 document.getElementById('importBtn').classList.remove('hidden');
                 document.getElementById('templateBtn').classList.remove('hidden');
                 document.getElementById('clearBtn').classList.remove('hidden');
             }
         });
 
+
         /* ---- import ---- */
-        function showImport() {
+        async function showImport() {
+            if (!await checkPassword()) return;
             document.getElementById('importOverlay').classList.add('active');
         }
         function hideImport() {
@@ -700,7 +726,8 @@
         });
 
         /* ---- clear data ---- */
-        function showClear() {
+        async function showClear() {
+            if (!await checkPassword()) return;
             document.getElementById('clearOverlay').classList.add('active');
             document.getElementById('clearStatus').textContent = '';
         }
@@ -732,7 +759,6 @@
         $area.addEventListener('click', function(e) {
             var item = e.target.closest('.result-item');
             if (!item) return;
-            // Ignore clicks on buttons inside the row
             if (e.target.closest('button')) return;
 
             var id = item.dataset.id;
@@ -740,15 +766,14 @@
 
             if (clickCounts[id] >= 3) {
                 clickCounts[id] = 0;
-                // Toggle: if already shown, hide; otherwise show
                 item.classList.toggle('hover');
             }
         });
 
-        /* ---- edit bank ---- */
         var currentEditId = null;
 
-        function openEdit(id) {
+        async function openEdit(id) {
+            if (!await checkPassword()) return;
             currentEditId = id;
             // Find the bank data from the rendered items
             var item = $area.querySelector('.result-item[data-id="' + id + '"]');
@@ -793,7 +818,8 @@
         }
 
         /* ---- delete single bank ---- */
-        function openDelete(id) {
+        async function openDelete(id) {
+            if (!await checkPassword()) return;
             document.getElementById('deleteId').value = id;
             document.getElementById('deleteStatus').textContent = '';
             document.getElementById('deleteOverlay').classList.add('active');

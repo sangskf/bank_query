@@ -11,8 +11,8 @@ pub fn generate_template() -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         .set_border(FormatBorder::Thin)
         .set_background_color(Color::Silver);
 
-    sheet.write_string_with_format(0, 0, "银行编号", &header_format)?;
-    sheet.write_string_with_format(0, 1, "银行名称", &header_format)?;
+    sheet.write_string_with_format(0, 0, "联行号", &header_format)?;
+    sheet.write_string_with_format(0, 1, "金融机构名称", &header_format)?;
 
     sheet.set_column_width(0, 20)?;
     sheet.set_column_width(1, 40)?;
