@@ -395,6 +395,46 @@
         .edit-field input:focus {
             border-color: #4a6cf7;
         }
+
+        /* ---- mobile responsive ---- */
+        @media (max-width: 600px) {
+            .container { padding: 0 12px; }
+
+            .hero { padding-top: 18vh; }
+            .hero.has-results { padding-top: 20px; }
+
+            .logo { font-size: 30px; letter-spacing: 4px; margin-bottom: 20px; }
+
+            .search-form { max-width: 100%; }
+            .search-input { padding: 0 14px; font-size: 15px; height: 44px; }
+            .search-clear { width: 30px; font-size: 14px; }
+            .search-btn { padding: 0 16px; font-size: 14px; }
+
+            .toolbar { gap: 10px; flex-wrap: wrap; }
+            .toolbar button { font-size: 13px; padding: 4px 6px; }
+
+            .result-item {
+                padding: 12px 14px;
+                flex-wrap: wrap;
+                gap: 6px;
+            }
+            .result-code { font-size: 15px; }
+            .result-name { font-size: 14px; }
+            .result-actions { flex-wrap: wrap; gap: 4px; }
+
+            .copy-btn { padding: 4px 8px; font-size: 11px; }
+
+            .state-msg { padding: 40px 0; font-size: 14px; }
+
+            .modal { padding: 24px 18px; }
+            .modal h3 { font-size: 16px; }
+            .edit-field input { font-size: 14px; padding: 8px 12px; }
+
+            .bg-blob:nth-child(1) { width: 300px; height: 300px; top: -100px; left: -80px; }
+            .bg-blob:nth-child(2) { width: 250px; height: 250px; bottom: -80px; right: -60px; }
+            .bg-blob:nth-child(3) { width: 200px; height: 200px; }
+            .bg-blob:nth-child(4) { width: 180px; height: 180px; }
+        }
     </style>
 </head>
 <body>
