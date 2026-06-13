@@ -2,7 +2,7 @@ use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::params;
 
-use crate::models::{Bank, SearchResponse};
+use crate::models::{AccessLog, Bank, SearchResponse};
 
 pub type DbPool = Pool<SqliteConnectionManager>;
 
@@ -27,6 +27,19 @@ pub fn init_pool(db_path: &str) -> Result<DbPool, Box<dyn std::error::Error>> {
         [],
     )?;
     conn.execute_batch("CREATE UNIQUE INDEX IF NOT EXISTS idx_banks_code_unique ON banks(code);")?;
+
+    // Access logs table
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS access_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ip TEXT NOT NULL,
+            action TEXT NOT NULL DEFAULT '',
+            accessed_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_access_logs_at ON access_logs(accessed_at);",
+    )?;
+    // Migration: add action column for older databases
+    conn.execute_batch("ALTER TABLE access_logs ADD COLUMN action TEXT NOT NULL DEFAULT '';").ok();
 
     Ok(pool)
 }
@@ -106,4 +119,38 @@ pub fn clear_banks(pool: &DbPool) -> Result<usize, Box<dyn std::error::Error>> {
     let conn = pool.get()?;
     let count = conn.execute("DELETE FROM banks", [])?;
     Ok(count)
+}
+
+pub fn insert_access_log(
+    pool: &DbPool,
+    ip: &str,
+    action: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let conn = pool.get()?;
+    conn.execute(
+        "INSERT INTO access_logs (ip, action, accessed_at) VALUES (?1, ?2, datetime('now', 'localtime'))",
+        params![ip, action],
+    )?;
+    Ok(())
+}
+
+pub fn get_access_logs(
+    pool: &DbPool,
+    limit: usize,
+) -> Result<Vec<AccessLog>, Box<dyn std::error::Error>> {
+    let conn = pool.get()?;
+    let mut stmt = conn.prepare(
+        "SELECT id, ip, action, accessed_at FROM access_logs ORDER BY id DESC LIMIT ?1",
+    )?;
+    let logs = stmt
+        .query_map(params![limit as i64], |row| {
+            Ok(AccessLog {
+                id: row.get(0)?,
+                ip: row.get(1)?,
+                action: row.get(2)?,
+                accessed_at: row.get(3)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(logs)
 }

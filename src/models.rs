@@ -18,3 +18,11 @@ pub struct BankUpdate {
     pub code: String,
     pub name: String,
 }
+
+#[derive(Debug, Serialize, Clone)]
+pub struct AccessLog {
+    pub id: i64,
+    pub ip: String,
+    pub action: String,
+    pub accessed_at: String,
+}

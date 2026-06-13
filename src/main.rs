@@ -175,6 +175,7 @@ async fn run_server() {
         .and(warp::get())
         .and(warp::query::<std::collections::HashMap<String, String>>())
         .and(with_db(pool.clone()))
+        .and(with_addr())
         .and_then(handle_search);
 
     // POST /api/banks/import — upload Excel
@@ -182,12 +183,14 @@ async fn run_server() {
         .and(warp::post())
         .and(warp::multipart::form().max_length(10_000_000))
         .and(with_db(pool.clone()))
+        .and(with_addr())
         .and_then(handle_import);
 
     // DELETE /api/banks — clear all data
     let clear = warp::path!("api" / "banks")
         .and(warp::delete())
         .and(with_db(pool.clone()))
+        .and(with_addr())
         .and_then(handle_clear);
 
     // PUT /api/banks/{id} — update a bank record
@@ -195,18 +198,28 @@ async fn run_server() {
         .and(warp::put())
         .and(warp::body::json())
         .and(with_db(pool.clone()))
+        .and(with_addr())
         .and_then(handle_update);
 
     // DELETE /api/banks/{id} — delete a single record
     let delete_one = warp::path!("api" / "banks" / i64)
         .and(warp::delete())
         .and(with_db(pool.clone()))
+        .and(with_addr())
         .and_then(handle_delete_one);
 
     // GET /api/template/download — download Excel template
     let template = warp::path!("api" / "template" / "download")
         .and(warp::get())
         .and_then(handle_template);
+
+    // GET /api/access-logs — view IP access logs (password protected via query param)
+    let access_logs = warp::path!("api" / "access-logs")
+        .and(warp::get())
+        .and(warp::query::<std::collections::HashMap<String, String>>())
+        .and(with_config(config.clone()))
+        .and(with_db(pool.clone()))
+        .and_then(handle_access_logs);
 
     let routes = index
         .or(verify_password)
@@ -216,6 +229,7 @@ async fn run_server() {
         .or(update)
         .or(delete_one)
         .or(template)
+        .or(access_logs)
         .with(warp::cors().allow_any_origin());
 
     println!("Server started at http://localhost:{}", port);
@@ -230,6 +244,13 @@ fn with_config(
 
 fn with_db(pool: DbPool) -> impl Filter<Extract = (DbPool,), Error = Infallible> + Clone {
     warp::any().map(move || pool.clone())
+}
+
+fn with_addr() -> impl Filter<Extract = (String,), Error = Infallible> + Clone {
+    warp::addr::remote().map(|addr: Option<std::net::SocketAddr>| {
+        addr.map(|a| a.ip().to_string())
+            .unwrap_or_else(|| "unknown".to_string())
+    })
 }
 
 // ── handlers ──
@@ -252,6 +273,7 @@ async fn handle_verify_password(
 async fn handle_search(
     params: std::collections::HashMap<String, String>,
     pool: DbPool,
+    ip: String,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     let q = params.get("q").map(|s| s.as_str()).unwrap_or("");
     if q.is_empty() {
@@ -259,6 +281,11 @@ async fn handle_search(
             "results": [],
             "total": 0
         })));
+    }
+
+    // Only log when _log=1 (user-initiated search: Enter/click, not real-time debounce)
+    if params.get("_log").map(|s| s.as_str()) == Some("1") {
+        let _ = db::insert_access_log(&pool, &ip, "查询");
     }
 
     match db::search_banks(&pool, q) {
@@ -275,6 +302,7 @@ use warp::multipart::FormData;
 async fn handle_import(
     mut form: FormData,
     pool: DbPool,
+    ip: String,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     let mut file_data = Vec::new();
 
@@ -319,6 +347,7 @@ async fn handle_import(
                     "message": "未能从文件中解析到有效数据"
                 })));
             }
+            let _ = db::insert_access_log(&pool, &ip, "导入");
             match db::insert_banks(&pool, &records) {
                 Ok(count) => Ok(warp::reply::json(&serde_json::json!({
                     "success": true,
@@ -337,7 +366,8 @@ async fn handle_import(
     }
 }
 
-async fn handle_clear(pool: DbPool) -> Result<impl warp::Reply, warp::Rejection> {
+async fn handle_clear(pool: DbPool, ip: String) -> Result<impl warp::Reply, warp::Rejection> {
+    let _ = db::insert_access_log(&pool, &ip, "清空");
     match db::clear_banks(&pool) {
         Ok(count) => Ok(warp::reply::json(&serde_json::json!({
             "success": true,
@@ -354,9 +384,13 @@ async fn handle_update(
     id: i64,
     body: models::BankUpdate,
     pool: DbPool,
+    ip: String,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     match db::update_bank(&pool, id, &body.code, &body.name) {
-        Ok(true) => Ok(warp::reply::json(&serde_json::json!({"success": true}))),
+        Ok(true) => {
+            let _ = db::insert_access_log(&pool, &ip, "编辑");
+            Ok(warp::reply::json(&serde_json::json!({"success": true})))
+        }
         Ok(false) => Ok(warp::reply::json(&serde_json::json!({
             "success": false, "message": "未找到该记录"
         }))),
@@ -366,9 +400,12 @@ async fn handle_update(
     }
 }
 
-async fn handle_delete_one(id: i64, pool: DbPool) -> Result<impl warp::Reply, warp::Rejection> {
+async fn handle_delete_one(id: i64, pool: DbPool, ip: String) -> Result<impl warp::Reply, warp::Rejection> {
     match db::delete_bank(&pool, id) {
-        Ok(true) => Ok(warp::reply::json(&serde_json::json!({"success": true}))),
+        Ok(true) => {
+            let _ = db::insert_access_log(&pool, &ip, "删除");
+            Ok(warp::reply::json(&serde_json::json!({"success": true})))
+        }
         Ok(false) => Ok(warp::reply::json(&serde_json::json!({
             "success": false, "message": "未找到该记录"
         }))),
@@ -397,5 +434,30 @@ async fn handle_template() -> Result<Box<dyn warp::Reply>, warp::Rejection> {
         Err(e) => Ok(Box::new(warp::reply::json(&serde_json::json!({
             "error": format!("生成模板失败: {}", e)
         })))),
+    }
+}
+
+async fn handle_access_logs(
+    params: std::collections::HashMap<String, String>,
+    config: Arc<Config>,
+    pool: DbPool,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    let password = params.get("password").map(|s| s.as_str()).unwrap_or("");
+    if password != config.admin_password {
+        return Ok(warp::reply::with_status(
+            warp::reply::json(&serde_json::json!({"error": "密码错误"})),
+            warp::http::StatusCode::FORBIDDEN,
+        ));
+    }
+
+    match db::get_access_logs(&pool, 500) {
+        Ok(logs) => Ok(warp::reply::with_status(
+            warp::reply::json(&logs),
+            warp::http::StatusCode::OK,
+        )),
+        Err(e) => Ok(warp::reply::with_status(
+            warp::reply::json(&serde_json::json!({"error": format!("查询失败: {}", e)})),
+            warp::http::StatusCode::INTERNAL_SERVER_ERROR,
+        )),
     }
 }

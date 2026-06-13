@@ -258,6 +258,27 @@
             font-weight: 700;
         }
 
+        #logBtn {
+            position: fixed;
+            top: 12px;
+            right: 12px;
+            z-index: 100;
+            background: none;
+            border: 1px solid #d0d5e0;
+            color: #888;
+            font-size: 13px;
+            padding: 5px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all .2s;
+            white-space: nowrap;
+        }
+        #logBtn:hover {
+            color: #4a6cf7;
+            border-color: #4a6cf7;
+            background: rgba(74,108,247,.06);
+        }
+
         .result-code .label {
             color: #333;
             font-weight: 400;
@@ -448,6 +469,7 @@
     <div class="bg-blob"></div>
     <div class="bg-blob"></div>
     <div class="bg-blob"></div>
+    <button id="logBtn" onclick="showAccessLogs()" title="IP 访问记录" class="hidden">访问记录</button>
     <div class="container">
         <div class="hero" id="hero">
             <div class="logo">金融机构查询</div>
@@ -526,6 +548,30 @@
         </div>
     </div>
 
+    <!-- Access logs modal -->
+    <div class="modal-overlay" id="logOverlay" onclick="if(event.target===this)hideAccessLogs()">
+        <div class="modal" style="max-width:600px;text-align:left">
+            <h3 style="text-align:center;margin-bottom:16px">IP 访问记录</h3>
+            <div style="max-height:400px;overflow-y:auto">
+                <table style="width:100%;border-collapse:collapse;font-size:14px">
+                    <thead>
+                        <tr style="background:#f5f6fa">
+                            <th style="padding:8px 12px;border-bottom:2px solid #e0e0e0;text-align:left">#</th>
+                            <th style="padding:8px 12px;border-bottom:2px solid #e0e0e0;text-align:left">IP 地址</th>
+                            <th style="padding:8px 12px;border-bottom:2px solid #e0e0e0;text-align:left">操作</th>
+                            <th style="padding:8px 12px;border-bottom:2px solid #e0e0e0;text-align:left">访问时间</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logTableBody"></tbody>
+                </table>
+            </div>
+            <div class="upload-status" id="logStatus"></div>
+            <div style="display:flex;justify-content:center;gap:10px;margin-top:16px">
+                <button class="modal-close" onclick="hideAccessLogs()">关闭</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         const $input = document.getElementById('searchInput');
         const $btn   = document.getElementById('searchBtn');
@@ -533,6 +579,7 @@
         const $hero  = document.getElementById('hero');
 
         var currentQuery = '';
+        var lastLoggedQuery = '';
 
         /* ---- search ---- */
         async function search() {
@@ -547,7 +594,12 @@
             $area.innerHTML = '<div class="state-msg">查询中…</div>';
 
             try {
-                const r = await fetch('/api/banks?q=' + encodeURIComponent(q));
+                var url = '/api/banks?q=' + encodeURIComponent(q);
+                if (q !== lastLoggedQuery) {
+                    url += '&_log=1';
+                    lastLoggedQuery = q;
+                }
+                const r = await fetch(url);
                 const d = await r.json();
                 render(d);
             } catch (_) {
@@ -689,6 +741,7 @@
                 document.getElementById('importBtn').classList.remove('hidden');
                 document.getElementById('templateBtn').classList.remove('hidden');
                 document.getElementById('clearBtn').classList.remove('hidden');
+                document.getElementById('logBtn').classList.remove('hidden');
             }
         });
 
@@ -849,6 +902,43 @@
         /* ---- download template ---- */
         function downloadTemplate() {
             window.open('/api/template/download', '_blank');
+        }
+
+        /* ---- access logs ---- */
+        async function showAccessLogs() {
+            var pwd = prompt('请输入操作密码：');
+            if (!pwd) return;
+            document.getElementById('logOverlay').classList.add('active');
+            document.getElementById('logStatus').textContent = '加载中…';
+            document.getElementById('logTableBody').innerHTML = '';
+            try {
+                var r = await fetch('/api/access-logs?password=' + encodeURIComponent(pwd));
+                if (r.status === 403) {
+                    document.getElementById('logStatus').textContent = '密码错误';
+                    return;
+                }
+                var d = await r.json();
+                document.getElementById('logStatus').textContent = '';
+                var tbody = document.getElementById('logTableBody');
+                if (!d.length) {
+                    document.getElementById('logStatus').textContent = '暂无记录';
+                    return;
+                }
+                for (var i = 0; i < d.length; i++) {
+                    var log = d[i];
+                    tbody.innerHTML += '<tr' + (i % 2 === 0 ? '' : ' style="background:#fafbfc"') + '>' +
+                        '<td style="padding:6px 12px">' + log.id + '</td>' +
+                        '<td style="padding:6px 12px">' + log.ip + '</td>' +
+                        '<td style="padding:6px 12px">' + log.action + '</td>' +
+                        '<td style="padding:6px 12px">' + log.accessed_at + '</td></tr>';
+                }
+            } catch (_) {
+                document.getElementById('logStatus').textContent = '加载失败';
+            }
+        }
+        function hideAccessLogs() {
+            document.getElementById('logOverlay').classList.remove('active');
+            document.getElementById('logStatus').textContent = '';
         }
 
         /* ---- handle ?q= from URL ---- */
